@@ -13,10 +13,8 @@ const serviceAccount = JSON.parse(
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: "nodejsprojec-56671.appspot.com", 
 });
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
 
-export { db, bucket };
+export { db };
