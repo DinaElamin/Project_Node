@@ -1,74 +1,98 @@
-        import * as PostModel from '../../Database/Models/PostModel.js';
+import postsCollection from "../../Database/Models/PostModel.js";
 
-        export const createPost = async (req, res) => {
-        try {
-            const { title, content, imageUrl } = req.body;
-            const userId = req.user.id;  // Middleware must be token
+// ✅ Create Post
+export const createPost = async (req, res) => {
+  try {
+    const { title, content, imageUrl } = req.body;
+    const userId = req.user.id; // جاي من الـ JWT middleware
 
-            const post = await PostModel.createPost({ title, content, imageUrl, userId });
-            res.status(201).json(post);
-        } catch (error) {
-            res.status(500).json({ message: 'Failed to create post', error: error.message });
-        }
-        };
+    if (!title || !content) {
+      return res.status(400).json({ message: "Title and content are required" });
+    }
 
-        export const getAllPosts = async (req, res) => {
-        try {
-            const posts = await PostModel.getAllPosts();
-            res.json(posts);
-        } catch (error) {
-            res.status(500).json({ message: 'Failed to fetch posts', error: error.message });
-        }
-        };
+    const newPost = {
+      title,
+      content,
+      imageUrl: imageUrl || null,
+      userId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-        export const getPostById = async (req, res) => {
-        try {
-            const post = await PostModel.getPostById(req.params.id);
-            if (!post) return res.status(404).json({ message: 'Post not found' });
-            res.json(post);
-        } catch (error) {
-            res.status(500).json({ message: 'Failed to fetch post', error: error.message });
-        }
-        };
+    const postRef = await postsCollection.add(newPost);
+    res.status(201).json({ message: "Post created", postId: postRef.id });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
-        export const updatePost = async (req, res) => {
-        try {
-            const { id } = req.params;
-            const userId = req.user.id;
-            const role = req.user.role;
+// ✅ Get All Posts (based on role)
+export const getPosts = async (req, res) => {
+  try {
+    let snapshot;
 
-            const post = await PostModel.getPostById(id);
-            if (!post) return res.status(404).json({ message: 'Post not found' });
+    if (req.user.role === "admin") {
+      // 👨‍💼 Admin: fetch all posts
+      snapshot = await postsCollection.get();
+    } else {
+      // 🧑‍💼 Regular user: fetch only own posts
+      snapshot = await postsCollection.where("userId", "==", req.user.id).get();
+    }
 
-            //  Admin or post owner or user can updte it
-            if (post.userId !== userId && role !== 'admin') {
-            return res.status(403).json({ message: 'Not authorized' });
-            }
+    const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
-            const updatedPost = await PostModel.updatePost(id, req.body);
-            res.json(updatedPost);
-        } catch (error) {
-            res.status(500).json({ message: 'Failed to update post', error: error.message });
-        }
-        };
 
-        export const deletePost = async (req, res) => {
-        try {
-            const { id } = req.params;
-            const userId = req.user.id;
-            const role = req.user.role;
+// ✅ Update Post
+export const updatePost = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, content, imageUrl } = req.body;
 
-            const post = await PostModel.getPostById(id);
-            if (!post) return res.status(404).json({ message: 'Post not found' });
+    const postDoc = await postsCollection.doc(id).get();
+    if (!postDoc.exists) return res.status(404).json({ message: "Post not found" });
 
-            //  Admin or post owner can updte it
-            if (post.userId !== userId && role !== 'admin') {
-            return res.status(403).json({ message: 'Not authorized' });
-            }
+    const postData = postDoc.data();
 
-            await PostModel.deletePost(id);
-            res.json({ message: 'Post deleted successfully' });
-        } catch (error) {
-            res.status(500).json({ message: 'Failed to delete post', error: error.message });
-        }
-        };
+    // 👇 اليوزر يقدر يعدل بس بوستاته، الأدمن يقدر يعدل أي حاجة
+    if (req.user.role !== "admin" && postData.userId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    await postsCollection.doc(id).update({
+      ...(title && { title }),
+      ...(content && { content }),
+      ...(imageUrl && { imageUrl }),
+      updatedAt: new Date()
+    });
+
+    res.json({ message: "Post updated" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ✅ Delete Post
+export const deletePost = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const postDoc = await postsCollection.doc(id).get();
+    if (!postDoc.exists) return res.status(404).json({ message: "Post not found" });
+
+    const postData = postDoc.data();
+
+    if (req.user.role !== "admin" && postData.userId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    await postsCollection.doc(id).delete();
+    res.json({ message: "Post deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

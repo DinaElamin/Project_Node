@@ -1,13 +1,23 @@
-    import express from 'express';
-    import * as PostController from './PostController.js';
-    import verifyToken from '../../Middleware/VerifyToken.js';
 
+   
+    import express from "express";
+    import { createPost, getPosts, updatePost, deletePost } from "./PostController.js";
+    import { checkAuth } from "../../Middleware/checkAuth.js"; // middleware JWT
+    
     const router = express.Router();
 
-    router.post('/', verifyToken, PostController.createPost);
-    router.get('/', PostController.getAllPosts);
-    router.get('/:id', PostController.getPostById);
-    router.put('/:id', verifyToken, PostController.updatePost);
-    router.delete('/:id', verifyToken, PostController.deletePost);
+
+    // Create Post (user + admin)
+    router.post("/", checkAuth, createPost);
+
+    // Get All Posts (anyone can view)
+    router.get("/",checkAuth, getPosts);
+
+    // Update Post (owner or admin)
+    router.put("/:id", checkAuth, updatePost);
+
+    // Delete Post (owner or admin)
+    router.delete("/:id", checkAuth, deletePost);
 
     export default router;
+
